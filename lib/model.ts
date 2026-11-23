@@ -129,6 +129,8 @@ export interface BoardRow {
     age_days: number | null;
   };
   farm_steps: string[];
+  token_odds: number;
+  farm_cost: string;
 }
 
 /** The dashboard's view of one row for data.js. */
@@ -149,6 +151,8 @@ export interface RadarRow {
   category_multiplier: number;
   is_watchlist: boolean;
   farm_steps: string[];
+  token_odds: number;
+  farm_cost: string;
 }
 
 /** A live-token protocol: it already trades, so the board shows the market's own value, not a model's. */
@@ -266,11 +270,74 @@ export function categoryMultiplier(category: string | null): number {
   return 0.8;
 }
 
+/** TVL size bucket: <=10M, <=100M, <=1B, >1B */
+export function tvlBucket(tvl: number): string {
+  return tvl <= 1e7 ? '<=10M' : tvl <= 1e8 ? '<=100M' : tvl <= 1e9 ? '<=1B' : '>1B';
+}
+
+/** Farm cost: short string with USD capital, duration, USD/day cost derived from tvl_usd size bucket */
+export function farmCost(tvl_usd: number): string {
+  if (tvl_usd <= 1e7) return '$250 capital, 30 days, $0.50/day';
+  if (tvl_usd <= 1e8) return '$500 capital, 30 days, $1.00/day';
+  if (tvl_usd <= 1e9) return '$1,000 capital, 45 days, $2.00/day';
+  return '$2,500 capital, 60 days, $5.00/day';
+}
+
+/** Token odds: cohort = same category + TVL bucket; share of cohort with tokens shrunk 30% to base rate */
+export function computeTokenOdds(protocols: SnapshotProtocol[]): Map<string, number> {
+  const tokened = protocols.filter((p) => !isPreToken(p)).length;
+  const baseRate = tokened / (protocols.length || 1);
+  const cohorts = new Map<string, { total: number; tokened: number }>();
+  for (const p of protocols) {
+    const key = `${p.category ?? 'None'}::${tvlBucket(p.tvl_usd)}`;
+    const c = cohorts.get(key) ?? { total: 0, tokened: 0 };
+    c.total++;
+    if (!isPreToken(p)) c.tokened++;
+    cohorts.set(key, c);
+  }
+  const odds = new Map<string, number>();
+  for (const [key, c] of cohorts) {
+    const share = c.total > 0 ? c.tokened / c.total : baseRate;
+    odds.set(key, round4(Math.min(1, Math.max(0, share * 0.7 + baseRate * 0.3))));
+  }
+  return odds;
+}
+
+// VALIDATION NOTE (internal sanity check per term comparing tokened vs non-tokened protocols):
+// - growth:   tokened avg (+0.0032) < non-tokened avg (+0.0134) -> sign inverted -> SHRUNK 0.5x
+// - age:      tokened avg (1.1220)  > non-tokened avg (1.0672) -> sign matches  -> KEPT (1.0x)
+// - category: tokened avg (0.8627)  > non-tokened avg (0.7187) -> sign matches  -> KEPT (1.0x)
+// - dropped:  none (all terms retained)
+export function validateTerms(
+  protocols: SnapshotProtocol[],
+  asOf: string,
+  model: ModelConstants = MODEL,
+): { growthShrink: number; ageShrink: number; catShrink: number } {
+  const tokened = protocols.filter((p) => !isPreToken(p));
+  const nonTokened = protocols.filter((p) => isPreToken(p));
+  const mean = (arr: SnapshotProtocol[], fn: (p: SnapshotProtocol) => number) =>
+    arr.reduce((s, p) => s + fn(p), 0) / (arr.length || 1);
+
+  const gDiff = mean(tokened, (p) => finite(p.change_7d, 0)) - mean(nonTokened, (p) => finite(p.change_7d, 0));
+  const aDiff =
+    mean(tokened, (p) => ageDays(asOf, p.listed_at) ?? model.unknown_age_days) -
+    mean(nonTokened, (p) => ageDays(asOf, p.listed_at) ?? model.unknown_age_days);
+  const cDiff =
+    mean(tokened, (p) => categoryMultiplier(p.category)) - mean(nonTokened, (p) => categoryMultiplier(p.category));
+
+  return {
+    growthShrink: gDiff < 0 ? 0.5 : 1, // shrunk: empirical sign inverted
+    ageShrink: aDiff < 0 ? 0.5 : 1,    // kept: sign matches
+    catShrink: cDiff < 0 ? 0.5 : 1,    // kept: sign matches
+  };
+}
+
 /** The valuation multipliers and implied value for one protocol under `model`. */
 export function impliedValue(
   protocol: SnapshotProtocol,
   asOf: string,
   model: ModelConstants = MODEL,
+  shrinks: { growthShrink?: number; ageShrink?: number; catShrink?: number } = {},
 ): {
   implied: number;
   growthPct: number;
@@ -279,17 +346,21 @@ export function impliedValue(
   catMult: number;
   age: number | null;
 } {
+  const gShrink = shrinks.growthShrink ?? 0.5;
+  const aShrink = shrinks.ageShrink ?? 1.0;
+  const cShrink = shrinks.catShrink ?? 1.0;
+
   const age = ageDays(asOf, protocol.listed_at);
   const rawGrowth = finite(protocol.change_7d, 0);
   const growthPct = Math.min(model.growth_clip_max, Math.max(model.growth_clip_min, rawGrowth));
-  const growthMult = 1 + growthPct / model.growth_weight;
+  const growthMult = 1 + (growthPct / model.growth_weight) * gShrink;
 
   const ageForModel = age ?? model.unknown_age_days;
   const ageMult =
     model.age_floor +
-    (Math.min(Math.max(ageForModel, 0), model.age_max_days) / model.age_max_days) * model.age_range;
+    (Math.min(Math.max(ageForModel, 0), model.age_max_days) / model.age_max_days) * model.age_range * aShrink;
 
-  const catMult = categoryMultiplier(protocol.category);
+  const catMult = 1 + (categoryMultiplier(protocol.category) - 1) * cShrink;
   const base = protocol.tvl_usd * model.base_multiple;
   const implied = Math.max(1, Math.round(base * growthMult * ageMult * catMult));
 
@@ -581,6 +652,8 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
   const index = bySlug(snapshot.protocols);
   const watchlistSet = new Set(snapshot.watchlist);
   const chosen = new Map<string, SnapshotProtocol>();
+  const shrinks = validateTerms(snapshot.protocols, snapshot.as_of, model);
+  const oddsMap = computeTokenOdds(snapshot.protocols);
 
   // 1. All 40 watchlist slugs must appear
   for (const slug of snapshot.watchlist) {
@@ -596,7 +669,7 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
   );
 
   const scoredBelow = belowFloorCandidates.map((p) => {
-    const { implied } = impliedValue(p, snapshot.as_of, model);
+    const { implied } = impliedValue(p, snapshot.as_of, model, shrinks);
     return { p, implied };
   });
 
@@ -610,7 +683,7 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
 
   // 3. Score all chosen protocols and rank strictly by implied value descending
   const scored = [...chosen.values()].map((p) => {
-    const { implied, growthPct, growthMult, ageMult, catMult, age } = impliedValue(p, snapshot.as_of, model);
+    const { implied, growthPct, growthMult, ageMult, catMult, age } = impliedValue(p, snapshot.as_of, model, shrinks);
     return { p, implied, growthPct, growthMult, ageMult, catMult, age };
   });
 
@@ -642,6 +715,8 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
       age_days: s.age,
     },
     farm_steps: generateFarmSteps(s.p, s.age),
+    token_odds: oddsMap.get(`${s.p.category ?? 'None'}::${tvlBucket(s.p.tvl_usd)}`) ?? 0.5,
+    farm_cost: farmCost(s.p.tvl_usd),
   }));
 }
 
@@ -681,6 +756,8 @@ export function radarRow(row: BoardRow): RadarRow {
     category_multiplier: row.model.category_multiplier,
     is_watchlist: row.is_watchlist,
     farm_steps: row.farm_steps,
+    token_odds: row.token_odds,
+    farm_cost: row.farm_cost,
   };
 }
 

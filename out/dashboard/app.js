@@ -1,12 +1,12 @@
-// Token Radar: Single-page application logic
-// Reads window.RADAR_DATA or window.RADAR written by main.ts
+// Token Radar — Single-page application logic
+// Reads window.RADAR_DATA or window.RADAR
 (function () {
   'use strict';
 
   var DATA = window.RADAR_DATA || window.RADAR || null;
   if (!DATA || !Array.isArray(DATA.rows)) {
-    var errorEl = document.getElementById('results-count');
-    if (errorEl) errorEl.textContent = 'Error: RADAR data not loaded';
+    var errEl = document.getElementById('results-count');
+    if (errEl) errEl.textContent = 'error: data source missing';
     return;
   }
 
@@ -50,8 +50,8 @@
     if (n === null || n === undefined || !isFinite(n)) return 'n/a';
     var abs = Math.abs(n);
     if (abs >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
-    if (abs >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
-    if (abs >= 1e3) return '$' + Math.round(n / 1e3) + 'K';
+    if (abs >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+    if (abs >= 1e3) return '$' + Math.round(n / 1e3).toLocaleString('en-US') + 'K';
     return '$' + Math.round(n).toLocaleString('en-US');
   }
 
@@ -69,6 +69,13 @@
   function fmtAge(days) {
     if (days === null || days === undefined || !isFinite(days)) return 'unknown';
     return Math.round(days) + ' d';
+  }
+
+  function padDots(label, totalLen) {
+    var dots = '';
+    var needed = Math.max(2, totalLen - label.length);
+    for (var i = 0; i < needed; i++) dots += '.';
+    return label + ' ' + dots + ' ';
   }
 
   function escapeHtml(str) {
@@ -126,27 +133,27 @@
     if (statProtocols) statProtocols.textContent = totalProtocols.toString();
     if (statWatchlist) statWatchlist.textContent = totalWatchlist.toString();
     if (statImplied) statImplied.textContent = fmtUsd(totalImpliedValue);
-    if (asOfDate && DATA.as_of) asOfDate.textContent = 'Snapshot: ' + DATA.as_of;
-    if (modelVer && DATA.model_version) modelVer.textContent = 'Model: ' + DATA.model_version;
+    if (asOfDate && DATA.as_of) asOfDate.textContent = 'snapshot: ' + DATA.as_of;
+    if (modelVer && DATA.model_version) modelVer.textContent = 'model: ' + DATA.model_version;
   }
 
   // Populate Categories Filter
   function initCategories() {
-    var categoriesSet = {};
+    var catMap = {};
     for (var i = 0; i < DATA.rows.length; i++) {
       var cat = DATA.rows[i].category;
-      if (cat) categoriesSet[cat] = (categoriesSet[cat] || 0) + 1;
-      else categoriesSet['Other'] = (categoriesSet['Other'] || 0) + 1;
+      if (cat) catMap[cat] = (catMap[cat] || 0) + 1;
+      else catMap['Other'] = (catMap['Other'] || 0) + 1;
     }
 
-    var sortedCategories = Object.keys(categoriesSet).sort();
-    categorySelect.innerHTML = '<option value="all">All Categories (' + DATA.rows.length + ')</option>';
+    var sortedCategories = Object.keys(catMap).sort();
+    categorySelect.innerHTML = '<option value="all">all categories (' + DATA.rows.length + ')</option>';
 
     for (var j = 0; j < sortedCategories.length; j++) {
       var c = sortedCategories[j];
       var opt = document.createElement('option');
       opt.value = c;
-      opt.textContent = c + ' (' + categoriesSet[c] + ')';
+      opt.textContent = c.toLowerCase() + ' (' + catMap[c] + ')';
       if (state.category === c) opt.selected = true;
       categorySelect.appendChild(opt);
     }
@@ -246,16 +253,16 @@
     var totalCount = DATA.rows.length;
     var filteredCount = sorted.length;
 
-    // Update results counter
+    // Results count
     if (filteredCount === totalCount) {
-      resultsCount.textContent = 'Showing ' + Math.min(state.displayedCount, filteredCount) + ' of ' + totalCount + ' protocols';
+      resultsCount.textContent = 'showing ' + Math.min(state.displayedCount, filteredCount) + ' of ' + totalCount + ' protocols';
     } else {
-      resultsCount.textContent = 'Showing ' + Math.min(state.displayedCount, filteredCount) + ' of ' + filteredCount + ' protocols (filtered from ' + totalCount + ')';
+      resultsCount.textContent = 'showing ' + Math.min(state.displayedCount, filteredCount) + ' of ' + filteredCount + ' (' + totalCount + ' total)';
     }
 
     if (filteredCount === 0) {
       tableBody.innerHTML = '';
-      emptyState.style.display = 'flex';
+      emptyState.style.display = 'block';
       loadMoreWrap.style.display = 'none';
       return;
     }
@@ -281,15 +288,22 @@
         growthClass = r.change_7d > 0 ? 'growth-pos' : r.change_7d < 0 ? 'growth-neg' : 'growth-zero';
       }
 
-      var chainsText = r.chains && r.chains.length ? r.chains.slice(0, 3).join(', ') : 'Primary';
+      var chainsText = r.chains && r.chains.length ? r.chains.slice(0, 3).join(', ') : 'primary';
       if (r.chains && r.chains.length > 3) chainsText += ' +' + (r.chains.length - 3);
 
-      var barPct = Math.max(4, Math.round((r.implied_value_usd / maxImplied) * 100));
+      var barPct = Math.max(5, Math.round((r.implied_value_usd / maxImplied) * 100));
 
-      var wlBadge = r.is_watchlist ? '<span class="star-badge" title="Watchlist Protocol">★</span>' : '';
+      var rankClass = 'rank-badge';
+      if (r.rank === 1) {
+        rankClass = 'rank-badge rank-1';
+      } else if (r.rank <= 3) {
+        rankClass = 'rank-badge rank-top';
+      }
 
-      html += '<tr tabindex="0" data-slug="' + escapeHtml(r.slug) + '" role="button" aria-label="View details for ' + escapeHtml(r.name) + '">' +
-        '<td class="td-rank"><span class="td-rank-badge">#' + r.rank + '</span></td>' +
+      var wlBadge = r.is_watchlist ? '<span class="star-pill" title="watchlist floor">★ watchlist</span>' : '';
+
+      html += '<tr tabindex="0" data-slug="' + escapeHtml(r.slug) + '" role="button" aria-label="view details for ' + escapeHtml(r.name) + '">' +
+        '<td class="td-rank"><span class="' + rankClass + '">#' + r.rank + '</span></td>' +
         '<td class="td-proto">' +
           '<div class="proto-info">' +
             '<div class="proto-name-row">' +
@@ -299,13 +313,13 @@
             '<span class="proto-chains">' + escapeHtml(chainsText) + '</span>' +
           '</div>' +
         '</td>' +
-        '<td class="td-category"><span class="category-tag">' + escapeHtml(r.category || 'General') + '</span></td>' +
+        '<td class="td-category"><span class="category-pill">' + escapeHtml(r.category || 'other') + '</span></td>' +
         '<td class="td-tvl"><span class="cell-num">' + fmtUsd(r.tvl_usd) + '</span></td>' +
         '<td class="td-growth"><span class="cell-num ' + growthClass + '">' + fmtPct(r.change_7d) + '</span></td>' +
         '<td class="td-age"><span class="cell-num">' + fmtAge(r.age_days) + '</span></td>' +
         '<td class="td-implied">' +
           '<div class="implied-cell-wrap">' +
-            '<span class="implied-value-text">' + fmtUsd(r.implied_value_usd) + '</span>' +
+            '<span class="implied-val-text">' + fmtUsd(r.implied_value_usd) + '</span>' +
             '<div class="implied-bar-bg"><div class="implied-bar-fill" style="width: ' + barPct + '%;"></div></div>' +
           '</div>' +
         '</td>' +
@@ -318,13 +332,13 @@
     if (filteredCount > state.displayedCount) {
       loadMoreWrap.style.display = 'flex';
       var remaining = filteredCount - state.displayedCount;
-      loadMoreBtn.textContent = 'Load more protocols (+' + Math.min(state.pageSize, remaining) + ')';
+      loadMoreBtn.textContent = 'load more protocols (+' + Math.min(state.pageSize, remaining) + ')';
     } else {
       loadMoreWrap.style.display = 'none';
     }
   }
 
-  // Open Protocol Detail Dialog
+  // Open Protocol Detail Dialog (Dark Terminal Card)
   function openDetail(slug) {
     var row = null;
     for (var i = 0; i < DATA.rows.length; i++) {
@@ -338,91 +352,50 @@
     state.selectedSlug = slug;
     writeHash();
 
-    var growthClass = 'growth-zero';
-    if (row.change_7d !== null && row.change_7d !== undefined) {
-      growthClass = row.change_7d > 0 ? 'growth-pos' : row.change_7d < 0 ? 'growth-neg' : 'growth-zero';
-    }
-
-    var chainsList = row.chains && row.chains.length ? row.chains.join(', ') : 'Single chain';
+    var chainsList = row.chains && row.chains.length ? row.chains.join(', ') : 'single chain';
     var steps = row.farm_steps || [];
 
-    var wlBadge = row.is_watchlist ?
-      '<span class="badge badge-gold">★ Watchlist Priority</span>' :
-      '<span class="badge badge-teal">Radar Tracked</span>';
-
-    var html = '<div class="dialog-header">' +
-      '<div class="dialog-title-group">' +
-        '<div class="dialog-badge-row">' +
-          wlBadge +
-          '<span class="badge badge-slate">Rank #' + row.rank + '</span>' +
-          '<span class="badge badge-slate">' + escapeHtml(row.category || 'General') + '</span>' +
-        '</div>' +
-        '<h2 id="modal-title" class="dialog-title">' + escapeHtml(row.name) + '</h2>' +
-        '<div class="dialog-meta-text">' +
-          '<span class="dialog-slug">' + escapeHtml(row.slug) + '</span>' +
-          '<span class="dialog-dot">&bull;</span>' +
-          '<span class="dialog-chains">Chains: ' + escapeHtml(chainsList) + '</span>' +
-        '</div>' +
+    var html = '<div class="term-title-bar">' +
+      '<div class="term-dots">' +
+        '<span class="term-dot dot-red" aria-hidden="true"></span>' +
+        '<span class="term-dot dot-yellow" aria-hidden="true"></span>' +
+        '<span class="term-dot dot-green" aria-hidden="true"></span>' +
       '</div>' +
-      '<button type="button" class="dialog-close-btn" id="modal-close-btn" aria-label="Close dialog">&times;</button>' +
+      '<div class="term-window-title" id="modal-title">radar@terminal: ~/protocols/' + escapeHtml(row.slug) + ' - zsh (80x24)</div>' +
+      '<button type="button" class="term-close-btn" id="modal-close-btn" aria-label="close terminal">[x] close</button>' +
     '</div>' +
-    '<div class="dialog-body">' +
-      '<section class="modal-section">' +
-        '<div class="section-title-row">' +
-          '<h3 class="section-title">Valuation Model Breakdown</h3>' +
-          '<span class="section-tag">Model: ' + escapeHtml(DATA.model_version || 'radar-2') + '</span>' +
-        '</div>' +
-        '<div class="breakdown-grid">' +
-          '<div class="breakdown-card">' +
-            '<span class="breakdown-label">Capital Base (TVL)</span>' +
-            '<span class="breakdown-value">' + fmtUsd(row.tvl_usd) + '</span>' +
-            '<span class="breakdown-note">Base multiple: &times; 0.20</span>' +
-          '</div>' +
-          '<div class="breakdown-card">' +
-            '<span class="breakdown-label">7-Day Growth</span>' +
-            '<span class="breakdown-value ' + growthClass + '">' + fmtPct(row.change_7d) + '</span>' +
-            '<span class="breakdown-note">Growth mult: &times; ' + row.growth_multiplier.toFixed(4) + '</span>' +
-          '</div>' +
-          '<div class="breakdown-card">' +
-            '<span class="breakdown-label">Age Multiplier</span>' +
-            '<span class="breakdown-value">' + (row.age_days !== null && row.age_days !== undefined ? row.age_days + ' days' : 'Default age') + '</span>' +
-            '<span class="breakdown-note">Age mult: &times; ' + row.maturity_multiplier.toFixed(4) + '</span>' +
-          '</div>' +
-          '<div class="breakdown-card">' +
-            '<span class="breakdown-label">Category Multiplier</span>' +
-            '<span class="breakdown-value">' + escapeHtml(row.category || 'General') + '</span>' +
-            '<span class="breakdown-note">Category mult: &times; ' + row.category_multiplier.toFixed(2) + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="formula-result-card">' +
-          '<div class="formula-header">Valuation Formula Calculation</div>' +
-          '<div class="formula-math">' +
-            'implied_value = TVL &times; 0.20 &times; Growth_Mult &times; Age_Mult &times; Category_Mult' +
-          '</div>' +
-          '<div class="formula-eval">' +
-            fmtUsd(row.tvl_usd) + ' &times; 0.20 &times; ' + row.growth_multiplier.toFixed(4) + ' &times; ' + row.maturity_multiplier.toFixed(4) + ' &times; ' + row.category_multiplier.toFixed(2) +
-          '</div>' +
-          '<div class="formula-final">' +
-            '<span class="formula-final-label">Implied Protocol Value:</span>' +
-            '<span class="formula-final-val">' + fmtUsdFull(row.implied_value_usd) + '</span>' +
-          '</div>' +
-        '</div>' +
-      '</section>' +
-      '<section class="modal-section">' +
-        '<div class="section-title-row">' +
-          '<h3 class="section-title">Airdrop Farm Execution Plan</h3>' +
-          '<span class="section-tag">' + steps.length + ' Actionable Steps</span>' +
-        '</div>' +
-        '<ol class="farm-steps-list">';
+    '<div class="term-body">' +
+      '<div class="term-prompt-cmd">' +
+        '<span class="term-cmd-glyph">&gt;</span>radar inspect --protocol ' + escapeHtml(row.slug) + ' --model ' + escapeHtml(DATA.model_version || 'radar-2') +
+      '</div>' +
+      '<div class="term-arithmetic-block">' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('protocol', 18) + '</span><span class="term-math-val">' + escapeHtml(row.name) + ' [rank #' + row.rank + (row.is_watchlist ? ', watchlist' : '') + ']</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('category', 18) + '</span><span class="term-math-val">' + escapeHtml(row.category || 'general') + '</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('chains', 18) + '</span><span class="term-math-val">' + escapeHtml(chainsList) + '</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('tvl_usd', 18) + '</span><span class="term-math-val">' + fmtUsdFull(row.tvl_usd) + '</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('base multiple', 18) + '</span><span class="term-math-val">x0.20</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('7d growth', 18) + '</span><span class="term-math-val">' + fmtPct(row.change_7d) + ' (mult: x' + row.growth_multiplier.toFixed(4) + ')</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('age multiplier', 18) + '</span><span class="term-math-val">x' + row.maturity_multiplier.toFixed(4) + ' (' + fmtAge(row.age_days) + ')</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('category mult', 18) + '</span><span class="term-math-val">x' + row.category_multiplier.toFixed(2) + '</span></div>' +
+        '<div class="term-section-divider"></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('formula', 18) + '</span><span class="term-math-val">tvl * 0.20 * growth * age * category</span></div>' +
+        '<div class="term-line"><span class="term-result-sign">=</span><span class="term-math-label">' + padDots('implied value', 18) + '</span><span class="term-math-val accent">' + fmtUsdFull(row.implied_value_usd) + '</span></div>' +
+      '</div>' +
+      '<div class="term-section-divider"></div>' +
+      '<div class="term-section-header">[ farm execution plan &bull; ' + steps.length + ' actionable steps ]</div>' +
+      '<div class="term-farm-steps">';
 
     for (var s = 0; s < steps.length; s++) {
-      html += '<li class="farm-step-item">' +
-        '<div class="step-num">' + (s + 1) + '</div>' +
-        '<div class="step-text">' + escapeHtml(steps[s]) + '</div>' +
-      '</li>';
+      var stepNum = (s + 1 < 10 ? '0' : '') + (s + 1);
+      html += '<div class="term-step-row">' +
+        '<span class="term-step-index">' + stepNum + '.</span>' +
+        '<span class="term-step-text">' + escapeHtml(steps[s]) + '</span>' +
+      '</div>';
     }
 
-    html += '</ol></section></div>';
+    html += '</div>' +
+      '<div class="term-footer-status">status: exit 0 &bull; press [esc] or click outside to dismiss</div>' +
+    '</div>';
 
     dialogContent.innerHTML = html;
 

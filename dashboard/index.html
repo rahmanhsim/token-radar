@@ -3,115 +3,109 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Token Radar | Pre-Token Valuation &amp; Farm Intelligence</title>
+  <title>token radar — pre-token valuation engine &amp; farm intelligence</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <a class="skip-link" href="#main-board">Skip to board</a>
+  <a class="skip-link" href="#main-board">skip to board</a>
 
   <div class="shell" id="app">
-    <!-- Header -->
-    <header class="top-header">
-      <div class="brand-row">
-        <div class="brand">
-          <div class="radar-glyph" aria-hidden="true">
-            <span class="radar-dot"></span>
-            <span class="radar-ring ring-1"></span>
-            <span class="radar-ring ring-2"></span>
-          </div>
-          <div class="brand-text">
-            <h1 class="brand-title">TOKEN RADAR</h1>
-            <p class="brand-subtitle">Pre-token protocol intelligence &amp; implied valuation</p>
-          </div>
-        </div>
-        <div class="meta-tags">
-          <span class="tag-pill" id="as-of-date">Snapshot: --</span>
-          <span class="tag-pill" id="model-ver">Model: radar-2</span>
-        </div>
+    <!-- Top Nav / Wordmark Bar -->
+    <header class="top-nav-bar">
+      <div class="wordmark-group">
+        <span class="wordmark-dot" aria-hidden="true"></span>
+        <span class="wordmark-text">token radar</span>
       </div>
-
-      <!-- Stat Chips -->
-      <div class="stat-chips-grid">
-        <div class="stat-chip chip-teal">
-          <div class="stat-chip-header">
-            <span class="stat-chip-icon">◈</span>
-            <span class="stat-chip-label">Protocols Tracked</span>
-          </div>
-          <div class="stat-chip-value" id="stat-protocols">--</div>
-          <div class="stat-chip-sub">Pre-token universe</div>
-        </div>
-
-        <div class="stat-chip chip-gold">
-          <div class="stat-chip-header">
-            <span class="stat-chip-icon">★</span>
-            <span class="stat-chip-label">Watchlist Count</span>
-          </div>
-          <div class="stat-chip-value" id="stat-watchlist">--</div>
-          <div class="stat-chip-sub">Priority farming floor</div>
-        </div>
-
-        <div class="stat-chip chip-cyan">
-          <div class="stat-chip-header">
-            <span class="stat-chip-icon">◆</span>
-            <span class="stat-chip-label">Total Implied Value</span>
-          </div>
-          <div class="stat-chip-value" id="stat-implied">--</div>
-          <div class="stat-chip-sub">Aggregated model value</div>
-        </div>
-      </div>
+      <nav class="nav-pills" aria-label="Meta details">
+        <span class="nav-pill" id="as-of-date">snapshot: --</span>
+        <span class="nav-pill pill-yellow" id="model-ver">model: radar-2</span>
+        <span class="nav-pill">status: live</span>
+      </nav>
     </header>
 
-    <!-- Controls Bar -->
+    <!-- Centered Hero -->
+    <section class="hero-section" aria-label="Introduction">
+      <div class="hero-content">
+        <h1 class="hero-headline">pre-token <span class="accent-orange">radar</span></h1>
+        <p class="hero-tagline">implied valuation engine &amp; farm execution alpha for unreleased tokens</p>
+
+        <!-- Stat Chips / Rounded Pill Badges -->
+        <div class="hero-stat-chips">
+          <div class="stat-chip">
+            <span class="chip-sym" aria-hidden="true">●</span>
+            <span class="chip-label">tracked:</span>
+            <span class="chip-val" id="stat-protocols">--</span>
+          </div>
+          <div class="stat-chip pill-yellow">
+            <span class="chip-sym" aria-hidden="true">★</span>
+            <span class="chip-label">watchlist:</span>
+            <span class="chip-val" id="stat-watchlist">--</span>
+          </div>
+          <div class="stat-chip pill-orange">
+            <span class="chip-sym" aria-hidden="true">◆</span>
+            <span class="chip-label">implied value:</span>
+            <span class="chip-val" id="stat-implied">--</span>
+          </div>
+          <div class="stat-chip">
+            <span class="chip-sym" aria-hidden="true">⚙</span>
+            <span class="chip-label">formula:</span>
+            <span class="chip-val">tvl &times; 0.20 &times; mults</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls Panel -->
     <section class="controls-panel" aria-label="Filters and controls">
-      <div class="search-wrap">
-        <span class="search-icon" aria-hidden="true">⌕</span>
-        <input type="search" id="search-input" class="search-input" placeholder="Search by name or slug..." aria-label="Search protocols by name or slug">
+      <div class="control-group search-wrap">
+        <span class="control-glyph" aria-hidden="true">⌕</span>
+        <input type="search" id="search-input" class="pill-control pill-input" placeholder="search protocol or slug..." aria-label="search protocols by name or slug">
       </div>
 
-      <div class="filter-group">
-        <label for="category-select" class="control-label">Category</label>
-        <select id="category-select" class="select-input" aria-label="Filter by category">
-          <option value="all">All Categories</option>
+      <div class="control-group select-wrap">
+        <label for="category-select" class="control-label">category:</label>
+        <select id="category-select" class="pill-control pill-select" aria-label="filter by category">
+          <option value="all">all categories</option>
         </select>
       </div>
 
-      <div class="filter-group">
-        <span class="control-label">Watchlist Filter</span>
-        <div class="toggle-group" role="radiogroup" aria-label="Watchlist filter">
-          <button type="button" class="toggle-btn active" id="filter-all" data-filter="all" aria-checked="true" role="radio">All</button>
-          <button type="button" class="toggle-btn" id="filter-watchlist" data-filter="watchlist" aria-checked="false" role="radio">★ Watchlist Only</button>
+      <div class="control-group toggle-wrap">
+        <span class="control-label">watchlist:</span>
+        <div class="toggle-pills" role="radiogroup" aria-label="watchlist filter">
+          <button type="button" class="pill-toggle active" id="filter-all" data-filter="all" aria-checked="true" role="radio">all</button>
+          <button type="button" class="pill-toggle" id="filter-watchlist" data-filter="watchlist" aria-checked="false" role="radio">★ watchlist only</button>
         </div>
       </div>
 
-      <div class="count-badge" id="results-count" aria-live="polite">Loading protocols...</div>
+      <div class="results-badge" id="results-count" aria-live="polite">loading protocols...</div>
     </section>
 
     <!-- Table Section -->
-    <main id="main-board" class="board-container" tabindex="-1">
+    <main id="main-board" class="board-panel" tabindex="-1">
       <div class="table-responsive">
         <table class="data-table" id="protocols-table">
           <thead>
             <tr>
               <th scope="col" class="th-sortable th-rank" data-col="rank" title="Sort by rank">
-                <button type="button" class="sort-btn"><span>Rank</span><span class="sort-indicator" aria-hidden="true">▲</span></button>
+                <button type="button" class="sort-btn"><span>rank</span><span class="sort-indicator" aria-hidden="true">▲</span></button>
               </th>
               <th scope="col" class="th-sortable th-proto" data-col="name" title="Sort by protocol name">
-                <button type="button" class="sort-btn"><span>Protocol</span><span class="sort-indicator" aria-hidden="true"></span></button>
+                <button type="button" class="sort-btn"><span>protocol</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
               <th scope="col" class="th-sortable th-category" data-col="category" title="Sort by category">
-                <button type="button" class="sort-btn"><span>Category</span><span class="sort-indicator" aria-hidden="true"></span></button>
+                <button type="button" class="sort-btn"><span>category</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
               <th scope="col" class="th-sortable th-tvl" data-col="tvl_usd" title="Sort by TVL">
-                <button type="button" class="sort-btn"><span>TVL</span><span class="sort-indicator" aria-hidden="true"></span></button>
+                <button type="button" class="sort-btn"><span>tvl</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
               <th scope="col" class="th-sortable th-growth" data-col="change_7d" title="Sort by 7d growth">
                 <button type="button" class="sort-btn"><span>7d growth</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
               <th scope="col" class="th-sortable th-age" data-col="age_days" title="Sort by age in days">
-                <button type="button" class="sort-btn"><span>Age (days)</span><span class="sort-indicator" aria-hidden="true"></span></button>
+                <button type="button" class="sort-btn"><span>age</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
               <th scope="col" class="th-sortable th-implied" data-col="implied_value_usd" title="Sort by implied value">
-                <button type="button" class="sort-btn"><span>Implied value</span><span class="sort-indicator" aria-hidden="true"></span></button>
+                <button type="button" class="sort-btn"><span>implied value</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
             </tr>
           </thead>
@@ -123,28 +117,28 @@
 
       <!-- Empty State -->
       <div id="empty-state" class="empty-state" style="display: none;">
-        <div class="empty-icon" aria-hidden="true">∅</div>
-        <h3>No matching protocols</h3>
-        <p>Try adjusting your search keywords, category filter, or watchlist toggle.</p>
-        <button type="button" id="reset-filters-btn" class="btn btn-teal">Reset Filters</button>
+        <div class="empty-glyph" aria-hidden="true">∅</div>
+        <h2 class="empty-title">no matching protocols</h2>
+        <p class="empty-sub">try relaxing your search keywords, category filter, or watchlist toggle.</p>
+        <button type="button" id="reset-filters-btn" class="pill-control reset-btn">reset filters</button>
       </div>
 
       <!-- Load More Button -->
       <div class="load-more-wrap" id="load-more-wrap">
-        <button type="button" id="load-more-btn" class="btn btn-outline">Load more protocols</button>
+        <button type="button" id="load-more-btn" class="pill-control load-more-btn">load more protocols</button>
       </div>
     </main>
 
     <!-- Footer -->
     <footer class="bottom-footer">
-      <p>Token Radar valuation engine &bull; Valuation figures derived from DefiLlama protocol index &bull; Model radar-2</p>
+      <p class="footer-text">built for fun on make.fun &bull; token radar pre-token alpha &bull; pure deterministic arithmetic &bull; no financial advice just math</p>
     </footer>
   </div>
 
-  <!-- Detail Dialog / Modal -->
-  <dialog id="detail-modal" class="detail-dialog" aria-labelledby="modal-title">
-    <div class="dialog-content" id="dialog-content">
-      <!-- Injected by JS on row selection -->
+  <!-- Detail Dialog / Modal (Dark Terminal Card) -->
+  <dialog id="detail-modal" class="terminal-modal" aria-labelledby="modal-title">
+    <div class="terminal-card" id="dialog-content">
+      <!-- Terminal content rendered by JS -->
     </div>
   </dialog>
 
