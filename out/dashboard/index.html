@@ -55,6 +55,26 @@
       </div>
     </section>
 
+    <!-- Summary Stat Strip -->
+    <section class="stat-strip" aria-label="Market overview metrics">
+      <div class="stat-pill-card">
+        <div class="stat-pill-num" id="strip-protocols">--</div>
+        <div class="stat-pill-label">protocols tracked</div>
+      </div>
+      <div class="stat-pill-card">
+        <div class="stat-pill-num" id="strip-median-tvl">--</div>
+        <div class="stat-pill-label">median tvl</div>
+      </div>
+      <div class="stat-pill-card">
+        <div class="stat-pill-num" id="strip-expected-tokens">--</div>
+        <div class="stat-pill-label">expected token issuances</div>
+      </div>
+      <div class="stat-pill-card">
+        <div class="stat-pill-num" id="strip-cheapest-farm">--</div>
+        <div class="stat-pill-label">cheapest farm</div>
+      </div>
+    </section>
+
     <!-- Controls Panel -->
     <section class="controls-panel" aria-label="Filters and controls">
       <div class="control-group search-wrap">
@@ -104,8 +124,14 @@
               <th scope="col" class="th-sortable th-age" data-col="age_days" title="Sort by age in days">
                 <button type="button" class="sort-btn"><span>age</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
+              <th scope="col" class="th-sortable th-odds" data-col="token_odds" title="Sort by token odds">
+                <button type="button" class="sort-btn"><span>token odds</span><span class="sort-indicator" aria-hidden="true"></span></button>
+              </th>
               <th scope="col" class="th-sortable th-implied" data-col="implied_value_usd" title="Sort by implied value">
                 <button type="button" class="sort-btn"><span>implied value</span><span class="sort-indicator" aria-hidden="true"></span></button>
+              </th>
+              <th scope="col" class="th-sortable th-quality" data-col="data_quality" title="Sort by data quality">
+                <button type="button" class="sort-btn"><span>quality</span><span class="sort-indicator" aria-hidden="true"></span></button>
               </th>
             </tr>
           </thead>
@@ -131,6 +157,14 @@
 
     <!-- Footer -->
     <footer class="bottom-footer">
+      <div class="quality-legend" aria-label="Data quality legend">
+        <span class="legend-title">data quality:</span>
+        <span class="legend-item"><span class="dq-dot dq-dot-green" aria-hidden="true"></span> clean</span>
+        <span class="legend-sep">&bull;</span>
+        <span class="legend-item"><span class="dq-dot dq-dot-yellow" aria-hidden="true"></span> one field missing</span>
+        <span class="legend-sep">&bull;</span>
+        <span class="legend-item"><span class="dq-dot dq-dot-red" aria-hidden="true"></span> sparse</span>
+      </div>
       <p class="footer-text">built for fun on make.fun &bull; token radar pre-token alpha &bull; pure deterministic arithmetic &bull; no financial advice just math</p>
     </footer>
   </div>

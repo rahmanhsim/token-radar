@@ -29,6 +29,11 @@
   var asOfDate = document.getElementById('as-of-date');
   var modelVer = document.getElementById('model-ver');
 
+  var stripProtocols = document.getElementById('strip-protocols');
+  var stripMedianTvl = document.getElementById('strip-median-tvl');
+  var stripExpectedTokens = document.getElementById('strip-expected-tokens');
+  var stripCheapestFarm = document.getElementById('strip-cheapest-farm');
+
   var searchInput = document.getElementById('search-input');
   var categorySelect = document.getElementById('category-select');
   var filterAllBtn = document.getElementById('filter-all');
@@ -118,23 +123,77 @@
     }
   }
 
+  // Data Quality Assessment Helper
+  function getDataQuality(r) {
+    var missing = 0;
+    if (!r.category || r.category === 'Other') missing++;
+    if (r.age_days === null || r.age_days === undefined) missing++;
+    if (r.change_7d === null || r.change_7d === undefined) missing++;
+    if (!r.chains || r.chains.length === 0) missing++;
+    if (r.tvl_usd === null || r.tvl_usd === undefined) missing++;
+
+    if (missing === 0) {
+      return { color: 'green', label: 'clean', title: 'clean (all key fields present)', count: 0 };
+    } else if (missing === 1) {
+      return { color: 'yellow', label: '1 missing', title: 'one field missing', count: 1 };
+    } else {
+      return { color: 'red', label: 'sparse', title: 'sparse (' + missing + ' fields missing)', count: missing };
+    }
+  }
+
   // Header & Stat Chips Initialization
   function initHeaderStats() {
-    var rows = DATA.rows;
+    var rows = (window.RADAR_DATA && window.RADAR_DATA.rows) || (window.RADAR && window.RADAR.rows) || (DATA && DATA.rows) || [];
     var totalProtocols = rows.length;
     var totalWatchlist = 0;
     var totalImpliedValue = 0;
 
+    var tvls = [];
+    var sumOdds = 0;
+    var countOdds = 0;
+    var minFarmCost = Infinity;
+
     for (var i = 0; i < rows.length; i++) {
-      if (rows[i].is_watchlist) totalWatchlist++;
-      if (rows[i].implied_value_usd) totalImpliedValue += rows[i].implied_value_usd;
+      var r = rows[i];
+      if (r.is_watchlist) totalWatchlist++;
+      if (r.implied_value_usd) totalImpliedValue += r.implied_value_usd;
+
+      if (typeof r.tvl_usd === 'number' && isFinite(r.tvl_usd)) {
+        tvls.push(r.tvl_usd);
+      }
+      if (typeof r.token_odds === 'number' && isFinite(r.token_odds)) {
+        sumOdds += r.token_odds;
+        countOdds++;
+      }
+      if (r.farm_cost) {
+        var cm = r.farm_cost.match(/\$([0-9,]+(?:\.[0-9]+)?)/);
+        if (cm) {
+          var parsedCost = parseFloat(cm[1].replace(/,/g, ''));
+          if (parsedCost < minFarmCost) minFarmCost = parsedCost;
+        }
+      }
     }
+
+    tvls.sort(function (a, b) { return a - b; });
+    var medianTvl = 0;
+    if (tvls.length > 0) {
+      var mid = Math.floor(tvls.length / 2);
+      medianTvl = tvls.length % 2 !== 0 ? tvls[mid] : (tvls[mid - 1] + tvls[mid]) / 2;
+    }
+
+    var avgOddsPct = countOdds > 0 ? (sumOdds / countOdds * 100).toFixed(1) + '%' : '0.0%';
+    var cheapestFarmStr = isFinite(minFarmCost) ? '$' + Math.round(minFarmCost).toLocaleString('en-US') : 'n/a';
 
     if (statProtocols) statProtocols.textContent = totalProtocols.toString();
     if (statWatchlist) statWatchlist.textContent = totalWatchlist.toString();
     if (statImplied) statImplied.textContent = fmtUsd(totalImpliedValue);
     if (asOfDate && DATA.as_of) asOfDate.textContent = 'snapshot: ' + DATA.as_of;
     if (modelVer && DATA.model_version) modelVer.textContent = 'model: ' + DATA.model_version;
+
+    if (stripProtocols) stripProtocols.textContent = totalProtocols.toString();
+    if (stripMedianTvl) stripMedianTvl.textContent = fmtUsd(medianTvl);
+    if (stripExpectedTokens) stripExpectedTokens.textContent = avgOddsPct;
+    if (stripCheapestFarm) stripCheapestFarm.textContent = cheapestFarmStr;
   }
 
   // Populate Categories Filter
@@ -214,6 +273,12 @@
       } else if (col === 'age_days') {
         av = a.age_days === null || a.age_days === undefined ? -1 : a.age_days;
         bv = b.age_days === null || b.age_days === undefined ? -1 : b.age_days;
+      } else if (col === 'token_odds') {
+        av = a.token_odds != null ? a.token_odds : -1;
+        bv = b.token_odds != null ? b.token_odds : -1;
+      } else if (col === 'data_quality') {
+        av = getDataQuality(a).count;
+        bv = getDataQuality(b).count;
       } else if (col === 'implied_value_usd') {
         av = a.implied_value_usd || 0;
         bv = b.implied_value_usd || 0;
@@ -293,6 +358,11 @@
 
       var barPct = Math.max(5, Math.round((r.implied_value_usd / maxImplied) * 100));
 
+      var oddsVal = typeof r.token_odds === 'number' ? r.token_odds : 0;
+      var oddsPct = (oddsVal * 100).toFixed(1) + '%';
+      var oddsBarWidth = Math.max(0, Math.min(100, Math.round(oddsVal * 100)));
+      var dq = getDataQuality(r);
+
       var rankClass = 'rank-badge';
       if (r.rank === 1) {
         rankClass = 'rank-badge rank-1';
@@ -317,11 +387,23 @@
         '<td class="td-tvl"><span class="cell-num">' + fmtUsd(r.tvl_usd) + '</span></td>' +
         '<td class="td-growth"><span class="cell-num ' + growthClass + '">' + fmtPct(r.change_7d) + '</span></td>' +
         '<td class="td-age"><span class="cell-num">' + fmtAge(r.age_days) + '</span></td>' +
+        '<td class="td-odds">' +
+          '<div class="odds-cell-wrap">' +
+            '<span class="odds-num">' + oddsPct + '</span>' +
+            '<div class="odds-bar-track" aria-hidden="true"><div class="odds-bar-fill" style="width: ' + oddsBarWidth + '%;"></div></div>' +
+          '</div>' +
+        '</td>' +
         '<td class="td-implied">' +
           '<div class="implied-cell-wrap">' +
             '<span class="implied-val-text">' + fmtUsd(r.implied_value_usd) + '</span>' +
             '<div class="implied-bar-bg"><div class="implied-bar-fill" style="width: ' + barPct + '%;"></div></div>' +
           '</div>' +
+        '</td>' +
+        '<td class="td-quality">' +
+          '<span class="dq-pill" title="data quality: ' + dq.title + '" aria-label="data quality: ' + dq.label + '">' +
+            '<span class="dq-dot dq-dot-' + dq.color + '" aria-hidden="true"></span>' +
+            '<span class="dq-label">' + dq.label + '</span>' +
+          '</span>' +
         '</td>' +
       '</tr>';
     }
@@ -377,6 +459,8 @@
         '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('7d growth', 18) + '</span><span class="term-math-val">' + fmtPct(row.change_7d) + ' (mult: x' + row.growth_multiplier.toFixed(4) + ')</span></div>' +
         '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('age multiplier', 18) + '</span><span class="term-math-val">x' + row.maturity_multiplier.toFixed(4) + ' (' + fmtAge(row.age_days) + ')</span></div>' +
         '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('category mult', 18) + '</span><span class="term-math-val">x' + row.category_multiplier.toFixed(2) + '</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('token odds', 18) + '</span><span class="term-math-val">' + (typeof row.token_odds === 'number' ? (row.token_odds * 100).toFixed(1) + '%' : 'n/a') + '</span></div>' +
+        '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('farm cost', 18) + '</span><span class="term-math-val">' + escapeHtml(row.farm_cost || 'n/a') + '</span></div>' +
         '<div class="term-section-divider"></div>' +
         '<div class="term-line"><span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('formula', 18) + '</span><span class="term-math-val">tvl * 0.20 * growth * age * category</span></div>' +
         '<div class="term-line"><span class="term-result-sign">=</span><span class="term-math-label">' + padDots('implied value', 18) + '</span><span class="term-math-val accent">' + fmtUsdFull(row.implied_value_usd) + '</span></div>' +
@@ -393,7 +477,33 @@
       '</div>';
     }
 
+    var odds = typeof row.token_odds === 'number' ? row.token_odds : 0.5;
+    var dailyCost = 1.0;
+    if (row.farm_cost) {
+      var dm = row.farm_cost.match(/\$([0-9.]+)\/day/);
+      if (dm) dailyCost = parseFloat(dm[1]);
+    }
+    var evRatio = odds / dailyCost;
+    var verdictType = 'CAREFUL';
+    var verdictClass = 'verdict-careful';
+    var verdictDesc = 'moderate EV: ' + (odds * 100).toFixed(1) + '% odds vs $' + dailyCost.toFixed(2) + '/day';
+
+    if (odds < 0.25 || (odds < 0.35 && dailyCost >= 2.0) || evRatio < 0.12) {
+      verdictType = 'PASS';
+      verdictClass = 'verdict-pass';
+      verdictDesc = 'unfavorable EV: ' + (odds * 100).toFixed(1) + '% odds vs $' + dailyCost.toFixed(2) + '/day';
+    } else if (odds >= 0.55 || (odds >= 0.40 && dailyCost <= 1.0) || evRatio >= 0.35) {
+      verdictType = 'YES';
+      verdictClass = 'verdict-yes';
+      verdictDesc = 'favorable EV: ' + (odds * 100).toFixed(1) + '% odds vs $' + dailyCost.toFixed(2) + '/day';
+    }
+
     html += '</div>' +
+      '<div class="term-section-divider"></div>' +
+      '<div class="term-line term-verdict-line">' +
+        '<span class="term-prompt-sign">&gt;</span><span class="term-math-label">' + padDots('verdict', 18) + '</span>' +
+        '<span class="term-math-val ' + verdictClass + '">farm: ' + verdictType + ' <span class="term-dim">(' + escapeHtml(verdictDesc) + ')</span></span>' +
+      '</div>' +
       '<div class="term-footer-status">status: exit 0 &bull; press [esc] or click outside to dismiss</div>' +
     '</div>';
 
@@ -482,7 +592,7 @@
             state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
           } else {
             state.sortCol = col;
-            state.sortDir = (col === 'tvl_usd' || col === 'implied_value_usd' || col === 'change_7d') ? 'desc' : 'asc';
+            state.sortDir = (col === 'tvl_usd' || col === 'implied_value_usd' || col === 'change_7d' || col === 'token_odds') ? 'desc' : 'asc';
           }
           writeHash();
           renderTable();
